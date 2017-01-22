@@ -1,0 +1,11 @@
+#!/bin/sh
+
+#check if go is installed
+which brew || (echo "Please install brew"; exit 1)
+which go || brew install go
+
+export GOPATH=`pwd`
+
+# get dependencies
+go get github.com/gorilla/mux
+go get golang.org/x/crypto/bcrypt
