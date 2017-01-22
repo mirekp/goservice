@@ -6,13 +6,20 @@ Features JSON API interface.
 
 Prerequisites:
 
-- go compiler
+   - go compiler
 
-Dependencies
+Dependencies:
 
    - gorilla/mux
    - crypto/bcrypt
 
+scripts/bootstap shell scripts can help with setting up.
+
+To build/run the service run:
+
+```
+  scripts/run-local
+```
 
 To create user account:
 ```
@@ -22,7 +29,7 @@ To post a message:
 ```
 curl -H "Content-Type: application/json" -X POST -d '{ "data": { "type": "message", "attributes": { "text": "this is a message text"}}}' http://localhost:9999/messages
 ```
-Delete the message:
+Delete the message (with ID 0):
 ```
 curl -X DELETE http://localhost:9999/messages/0
 ```
@@ -30,7 +37,7 @@ Viewing all messages:
 ```
 curl http://localhost:9999/messages
 ```
-Editing a message:
+Editing a message (with ID 0):
 ```
 curl -H "Content-Type: application/json" -X PATCH -d '{ "data": {"attributes": { "text": "this is a new message text"}}}' http://localhost:9999/messages/0
 ```
