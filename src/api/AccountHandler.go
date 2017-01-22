@@ -1,76 +1,83 @@
 package main
 
 import (
-    "net/http"
-    "encoding/json"
-    "golang.org/x/crypto/bcrypt"
-    "fmt"
+	"net/http"
+	"encoding/json"
+	"fmt"
+	"github.com/gorilla/mux"
+	"strconv"
 )
 
-/*
+func GetAccountsHandler(writer http.ResponseWriter, request *http.Request) {
+	id, err := getAccountIDFromRequest(request)
 
-Sample account JSON:
+	if err != nil {
+		fmt.Printf("Unable to extract ID from request\n")
+		writer.WriteHeader(http.StatusBadRequest)
+		return
+	}
 
-{
-    data : {
-        "id": "username",
-        "type": "account",
-        "attributes": {
-            "password", "plaintext-password"
-         }
-    }
-}
- */
+	account, err := GetAccountByID(id)
 
-type AccountJSON struct {
-    AccountData AccountData `json:"data"`
-}
+	if err != nil {
+		fmt.Printf("Unable to find requested account\n")
+		writer.WriteHeader(http.StatusNotFound)
+		return
+	}
 
-type AccountData struct {
-    ID             string   `json:"id"`
-    Type           string   `json:"type"`
-    Attr           userAttr `json:"attributes"`
+	json.NewEncoder(writer).Encode(serialiseAccountToJSON(account))
 }
 
-type userAttr struct {
-    Password       string   `json:"password,omitempty"`
+func CreateAccountHandler(writer http.ResponseWriter, request *http.Request) {
+
+	// parse the JSON request
+	var accountJSON AccountJSON
+	err := json.NewDecoder(request.Body).Decode(&accountJSON)
+	accountData := accountJSON.AccountData
+
+	if err != nil || accountData.Type != "account" || accountData.Attr.Username == "" || accountData.Attr.Password == "" {
+		fmt.Printf("Unable to process your request\n")
+		writer.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	_, err = GetAccountByName(accountData.Attr.Username)
+
+	if err == nil {
+		fmt.Printf("Account already exits\n")
+		writer.WriteHeader(http.StatusConflict)
+		return
+	}
+
+	account, err := CreateAccount(accountData.Attr.Username, accountData.Attr.Password)
+
+	if err != nil {
+		fmt.Printf("Unable to create account due to internal error\n")
+		writer.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	writer.Header().Set("Content-Type", "application/json")
+	writer.Header().Set("Location", fmt.Sprintf("http://%s:%d%s/%d", HostName, Port, RouteAccounts, account.id))
+	writer.WriteHeader(http.StatusCreated)
+	createdAccount := serialiseAccountToJSON(account)
+	json.NewEncoder(writer).Encode(createdAccount)
+	return
 }
 
-var accounts = make(map[string]string)
+func getAccountIDFromRequest(request *http.Request) (int, error) {
+	vars := mux.Vars(request)
+	stringID, ok := vars["id"]
 
-func GetAccountsHandler (writer http.ResponseWriter, _ *http.Request) {
+	if ok == false {
+		return 0, fmt.Errorf("No message-id provided")
+	}
 
-    json.NewEncoder(writer).Encode(accounts)
+	id, err := strconv.Atoi(stringID)
+	if err != nil {
+		return 0, fmt.Errorf("Bad msg-id format")
+	}
+
+	return id, nil
 }
 
-func CreateAccountHandler (writer http.ResponseWriter, request *http.Request) {
-
-    // parse the JSON request
-    var accountJSON AccountJSON
-    err := json.NewDecoder(request.Body).Decode(&accountJSON)
-    accountData := accountJSON.AccountData
-
-    if err != nil || accountData.Type != "account" || accountData.ID == "" || accountData.Attr.Password == "" {
-        fmt.Printf("Unable to process your request\n")
-        writer.WriteHeader(http.StatusBadRequest)
-        return
-    }
-
-    // stop if a given username already exists in the database
-    _, ok := accounts[accountData.ID]
-    if ok == true {
-        fmt.Printf("User %s already exists\n", accountData.ID)
-        writer.WriteHeader(http.StatusConflict)
-        return
-    }
-
-    // calculate hash of the password as we don't want to store plaintext passwords in our model
-    hashedPassword, err := bcrypt.GenerateFromPassword([]byte(accountData.Attr.Password), bcrypt.DefaultCost)
-    if err != nil {
-        writer.WriteHeader(http.StatusInternalServerError)
-        return
-    }
-
-    fmt.Println("Creating user:", accountData.ID)
-    accounts[accountData.ID] = string(hashedPassword)
-}
